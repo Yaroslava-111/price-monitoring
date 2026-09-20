@@ -169,8 +169,26 @@ def render() -> None:
             file_name="suppliers.csv",
             mime="text/csv",
         )
+
+        _agent_block(conn)
     finally:
         conn.close()
+
+
+def _agent_block(conn: sqlite3.Connection) -> None:
+    from app.services.agent import AgentError, load_agent
+
+    if st.button("🤖 Запросить рекомендации агента", key="agents_suppliers"):
+        with st.spinner("Агент анализирует прайсы поставщиков…"):
+            try:
+                recs = load_agent(conn).analyze_prices("supplier")
+                st.success(
+                    f"Агент подготовил {len(recs)} рекомендаций по закупке."
+                )
+            except AgentError as exc:
+                st.error(str(exc))
+            finally:
+                st.rerun()
 
 
 def _matrix_csv(items: list[dict]) -> str:

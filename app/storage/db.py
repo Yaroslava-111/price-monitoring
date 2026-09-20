@@ -145,6 +145,9 @@ MIGRATIONS: list[str] = [
     ALTER TABLE mappings ADD COLUMN price_date TEXT;
     ALTER TABLE mappings ADD COLUMN load_id INTEGER REFERENCES loads(id) ON DELETE SET NULL;
     """,
+    """
+    ALTER TABLE agent_log ADD COLUMN result TEXT NOT NULL DEFAULT '';
+    """,
 ]
 
 

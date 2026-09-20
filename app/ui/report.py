@@ -9,6 +9,7 @@ import streamlit as st
 from app.core.report import clamp_threshold
 from app.services import report as report_service
 from app.services import settings as settings_service
+from app.services.agent import AgentError, load_agent
 from app.storage.db import get_connection
 
 _SETTING_KEY = "deviation_threshold_pct"
@@ -143,6 +144,8 @@ def render() -> None:
 
     st.caption("Самое сильное отклонение сверху (отрицательное Δ%).")
 
+    _render_agent_block("competitor", "price_change")
+
     csv_buf = io.StringIO()
     df_display.to_csv(csv_buf, index=False)
     st.download_button(
@@ -151,3 +154,57 @@ def render() -> None:
         file_name="report_competitors.csv",
         mime="text/csv",
     )
+
+
+def _render_agent_block(scope: str, rec_type: str) -> None:
+    conn = _conn()
+    try:
+        agent = load_agent(conn)
+        if st.button("🤖 Запросить рекомендации агента", key=f"agent_{scope}"):
+            with st.spinner("Агент анализирует цены…"):
+                try:
+                    recs = agent.analyze_prices(scope)
+                    st.success(f"Агент подготовил {len(recs)} рекомендаций.")
+                except AgentError as exc:
+                    st.error(str(exc))
+                finally:
+                    st.rerun()
+
+        recommendations = _list_recommendations(conn, rec_type)
+        if recommendations:
+            st.subheader("Рекомендации агента")
+            for rec in recommendations:
+                with st.expander(rec["title"]):
+                    st.write(rec["rationale"])
+    finally:
+        conn.close()
+
+
+def _list_recommendations(conn: sqlite3.Connection, rec_type: str) -> list[dict]:
+    import json
+
+    rows = conn.execute(
+        """
+        SELECT r.id, r.product_id, r.payload, p.sku, p.name AS product_name
+        FROM recommendations r
+        JOIN products p ON p.id = r.product_id
+        WHERE r.rec_type = ? AND r.status = 'proposed'
+        ORDER BY r.id DESC
+        """,
+        (rec_type,),
+    ).fetchall()
+    result: list[dict] = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"] or "{}")
+        except ValueError:
+            continue
+        title = f"{row['sku']} — {row['product_name']}"
+        result.append(
+            {
+                "id": row["id"],
+                "title": title,
+                "rationale": payload.get("rationale", ""),
+            }
+        )
+    return result

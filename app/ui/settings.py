@@ -5,6 +5,7 @@ import sqlite3
 import pandas as pd
 import streamlit as st
 
+from app.services import settings as settings_service
 from app.services import sources as sources_service
 from app.services.sources import SourceError
 from app.storage.db import get_connection
@@ -36,13 +37,18 @@ def render() -> None:
     st.header("Настройки")
     st.caption("Реестр источников данных и параметры сопоставления.")
 
-    tab_sources, tab_rules = st.tabs(["Источники", "Правила сопоставления"])
+    tab_sources, tab_rules, tab_agent = st.tabs(
+        ["Источники", "Правила сопоставления", "ИИ-агент"]
+    )
 
     with tab_sources:
         _sources_section()
 
     with tab_rules:
         _rules_section()
+
+    with tab_agent:
+        _agent_section()
 
 
 def _sources_section() -> None:
@@ -253,6 +259,53 @@ def _form_edit_source() -> None:
         try:
             sources_service.delete_source(conn, source.id)
             st.success("Источник удалён.")
+            st.rerun()
+        finally:
+            conn.close()
+
+
+def _agent_section() -> None:
+    st.subheader("Параметры ИИ-агента (Timeweb)")
+    st.markdown(
+        "- Все вызовы агента проходят через `AgentAdapter` и логируются в `agent_log`.\n"
+        "- Рекомендации агента — **не решения**: владелец применяет их вручную.\n"
+        "- Мок-режим: пока endpoint пустой — ответы генерируются детерминированно локально."
+    )
+
+    conn = _conn()
+    try:
+        endpoint = settings_service.get_setting(conn, "agent_endpoint")
+        api_key = settings_service.get_setting(conn, "agent_key")
+        model = settings_service.get_setting(conn, "agent_model")
+    finally:
+        conn.close()
+
+    endpoint_new = st.text_input(
+        "Эндпоинт Timeweb",
+        value=endpoint,
+        placeholder="https://…/api (пусто = мок-режим)",
+        key="agent_endpoint_input",
+    )
+    api_key_new = st.text_input(
+        "API-ключ",
+        value=api_key,
+        type="password",
+        key="agent_key_input",
+    )
+    model_new = st.text_input(
+        "Модель",
+        value=model,
+        placeholder="например: timeweb-ai/gpt-…",
+        key="agent_model_input",
+    )
+
+    if st.button("💾 Сохранить параметры агента", key="agent_save"):
+        conn = _conn()
+        try:
+            settings_service.set_setting(conn, "agent_endpoint", endpoint_new.strip())
+            settings_service.set_setting(conn, "agent_key", api_key_new.strip())
+            settings_service.set_setting(conn, "agent_model", model_new.strip())
+            st.success("Параметры агента сохранены.")
             st.rerun()
         finally:
             conn.close()

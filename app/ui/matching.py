@@ -7,6 +7,7 @@ import streamlit as st
 
 from app.services import catalog as catalog_service
 from app.services import matching as matching_service
+from app.services.agent import AgentAdapter, AgentError, latest_match_rationale
 from app.storage.db import get_connection
 
 PAGE_SIZE = 10
@@ -73,9 +74,13 @@ def render() -> None:
                     )
 
                 if mid.get("ai_recommended"):
-                    st.info("🤖 Рекомендация агента: этот товар." )
+                    st.info("🤖 Рекомендация агента: этот товар.")
                 else:
                     st.caption("Предложено системой (фаззи-сопоставление).")
+
+                rationale = latest_match_rationale(conn, mid["id"])
+                if rationale:
+                    st.caption(f"Обоснование агента: {rationale}")
 
                 selected_label = st.selectbox(
                     "Товар в каталоге",
@@ -90,6 +95,16 @@ def render() -> None:
                 col1, col2, col3 = st.columns([1, 1, 3])
                 confirm = col1.button("Подтвердить", key=f"mapping_{mid['id']}_confirm")
                 reject = col2.button("Отклонить", key=f"mapping_{mid['id']}_reject")
+                ask_agent = col3.button("🤖 Спросить агента", key=f"mapping_{mid['id']}_agent")
+                if ask_agent:
+                    with st.spinner("Агент думает…"):
+                        try:
+                            AgentAdapter(conn).match_suggest(mid["id"])
+                            st.success("Рекомендация агента готова.")
+                        except AgentError as exc:
+                            st.error(str(exc))
+                        finally:
+                            st.rerun()
                 if confirm or reject:
                     with st.spinner("Сохранение…"):
                         try:
