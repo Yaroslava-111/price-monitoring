@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import streamlit as st
 
+from app.storage.db import init_db
 from app.ui import catalog, history, matching, report, settings as settings_screen
 from app.ui import suppliers, upload
 
@@ -17,6 +18,7 @@ PAGES = {
 
 
 def main() -> None:
+    init_db()
     st.set_page_config(page_title="Ценовой мониторинг", layout="wide")
     st.title("Ценовой мониторинг: конкуренты и поставщики")
 

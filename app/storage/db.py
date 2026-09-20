@@ -1,11 +1,17 @@
 from __future__ import annotations
 
+import os
 import sqlite3
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[2]
-DB_DIR = BASE_DIR / "db"
-DB_PATH = DB_DIR / "monitoring.db"
+
+
+def _db_path() -> Path:
+    override = os.environ.get("MONITORING_DB")
+    if override:
+        return Path(override)
+    return BASE_DIR / "db" / "monitoring.db"
 
 DEFAULT_SETTINGS: dict[str, str] = {
     "auto_threshold": "90",
@@ -137,8 +143,9 @@ MIGRATIONS: list[str] = [
 
 
 def get_connection() -> sqlite3.Connection:
-    DB_DIR.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(str(DB_PATH))
+    path = _db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")
