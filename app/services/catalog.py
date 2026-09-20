@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import re
 import sqlite3
 from dataclasses import dataclass
 
+from app.core.normalize import normalize_sku
 from app.storage.repositories import fetch_all, fetch_one, row_to_dict, rows_to_dicts
 
 SKU_MAX_LEN = 64
@@ -25,10 +25,6 @@ class Product:
     category: str
     own_price: float
     is_active: bool
-
-
-def normalize_sku(sku: str) -> str:
-    return re.sub(r"\s+", " ", sku.strip().upper())
 
 
 def _validate_string(value: str, label: str, max_len: int) -> list[str]:
