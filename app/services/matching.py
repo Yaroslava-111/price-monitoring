@@ -41,17 +41,24 @@ def upsert_mapping(
     method: str,
     similarity: float,
     status: str,
+    price: float | None = None,
+    price_date: str | None = None,
+    load_id: int | None = None,
 ) -> None:
     conn.execute(
         """
         INSERT INTO mappings
-            (product_id, external_key, external_name, method, similarity, status)
-        VALUES (?, ?, ?, ?, ?, ?)
+            (product_id, external_key, external_name, method, similarity, status,
+             price, price_date, load_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT (external_key, product_id) DO UPDATE SET
             external_name = excluded.external_name,
             method = excluded.method,
             similarity = excluded.similarity,
-            status = excluded.status
+            status = excluded.status,
+            price = excluded.price,
+            price_date = excluded.price_date,
+            load_id = excluded.load_id
         """,
         (
             product_id,
@@ -60,6 +67,9 @@ def upsert_mapping(
             method,
             similarity,
             status,
+            price,
+            price_date,
+            load_id,
         ),
     )
     conn.commit()

@@ -9,8 +9,8 @@ from app.storage import db as db_module
 
 
 @pytest.fixture()
-def conn(tmp_path):
-    db_module._db_path = lambda: tmp_path / "test.db"
+def conn(tmp_path, monkeypatch):
+    monkeypatch.setattr(db_module, "_db_path", lambda: tmp_path / "test.db")
     connection = db_module.init_db()
     yield connection
     connection.close()

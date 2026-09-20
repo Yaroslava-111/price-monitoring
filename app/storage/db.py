@@ -7,12 +7,6 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 
-def _db_path() -> Path:
-    override = os.environ.get("MONITORING_DB")
-    if override:
-        return Path(override)
-    return BASE_DIR / "db" / "monitoring.db"
-
 DEFAULT_SETTINGS: dict[str, str] = {
     "auto_threshold": "90",
     "manual_threshold": "70",
@@ -23,6 +17,13 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "max_upload_mb": "20",
     "max_upload_rows": "50000",
 }
+
+
+def _db_path() -> Path:
+    override = os.environ.get("MONITORING_DB")
+    if override:
+        return Path(override)
+    return BASE_DIR / "db" / "monitoring.db"
 
 MIGRATIONS: list[str] = [
     """
@@ -138,6 +139,11 @@ MIGRATIONS: list[str] = [
         key TEXT PRIMARY KEY,
         value TEXT NOT NULL
     );
+    """,
+    """
+    ALTER TABLE mappings ADD COLUMN price REAL;
+    ALTER TABLE mappings ADD COLUMN price_date TEXT;
+    ALTER TABLE mappings ADD COLUMN load_id INTEGER REFERENCES loads(id) ON DELETE SET NULL;
     """,
 ]
 
