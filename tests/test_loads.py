@@ -196,3 +196,34 @@ def test_load_records_persisted(conn):
     assert load["ok_rows"] == 1
     assert load["error_rows"] == 1
     assert load["errors_summary"] != "[]"
+
+
+def test_thresholds_from_settings_affect_import(conn):
+    from app.services import settings as settings_service
+
+    catalog_service.create_product(conn, "TEA", "Чай зелёный листовой", 150.0)
+    src = _make_competitor(conn)
+    data = _csv_bytes(
+        [
+            ["название", "цена", "дата"],
+            ["Чай листовой новый сорт 250г", "999", "2026-09-01"],
+        ]
+    )
+
+    # С близким названием (85%) при порогах по умолчанию — pending.
+    result = loads_service.run_import(conn, data, "k.csv", "competitor", src.id)
+    assert result.ok_rows == 0
+    assert result.pending_rows == 1
+
+    # Снижаем auto-порог до 70 и manual до 60 — та же строка должна стать auto.
+    settings_service.set_setting(conn, "auto_threshold", "70")
+    settings_service.set_setting(conn, "manual_threshold", "60")
+    conn.execute("DELETE FROM prices")
+    conn.execute("DELETE FROM mappings")
+    conn.commit()
+
+    result2 = loads_service.run_import(conn, data, "k.csv", "competitor", src.id)
+    assert result2.ok_rows == 1
+    m = conn.execute("SELECT * FROM mappings").fetchone()
+    assert m["status"] == "auto"
+    assert m["method"] == "fuzzy"

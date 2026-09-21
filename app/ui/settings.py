@@ -313,29 +313,52 @@ def _agent_section() -> None:
 
 def _rules_section() -> None:
     st.subheader("Правила сопоставления")
+    st.markdown(
+        "Пороги в процентах (0–100). Требуется `manual < auto`: "
+        "ниже ручного порога — «не сопоставлено», выше автоматического — "
+        "автоподтверждение при единственном кандидате, между ними — спорная зона."
+    )
+
     conn = _conn()
     try:
-        auto_threshold = float(
-            conn.execute(
-                "SELECT value FROM settings WHERE key = 'auto_threshold'"
-            ).fetchone()["value"]
-        )
-        manual_threshold = float(
-            conn.execute(
-                "SELECT value FROM settings WHERE key = 'manual_threshold'"
-            ).fetchone()["value"]
-        )
+        default = settings_service.get_all_settings(conn)
     finally:
         conn.close()
+
+    auto_threshold = st.number_input(
+        "Автоматический порог (auto), %",
+        min_value=0,
+        max_value=100,
+        value=int(float(default.get("auto_threshold", "90"))),
+        step=1,
+        key="settings_auto_threshold",
+    )
+    manual_threshold = st.number_input(
+        "Ручной порог (manual), %",
+        min_value=0,
+        max_value=100,
+        value=int(float(default.get("manual_threshold", "70"))),
+        step=1,
+        key="settings_manual_threshold",
+    )
+
+    if manual_threshold >= auto_threshold:
+        st.error("Ручной порог должен быть строго меньше автоматического.")
+    elif st.button("💾 Сохранить пороги", key="thresholds_save"):
+        conn = _conn()
+        try:
+            settings_service.set_setting(conn, "auto_threshold", str(int(auto_threshold)))
+            settings_service.set_setting(conn, "manual_threshold", str(int(manual_threshold)))
+            st.success("Пороги сопоставления сохранены.")
+            st.rerun()
+        finally:
+            conn.close()
 
     st.markdown(
         f"- **Точный SKU** — автоподтверждение (правило 1).\n"
         f"- **Нечёткое название ≥ {auto_threshold:.0f}%** (один кандидат) — автоподтверждение (правило 2).\n"
         f"- **{manual_threshold:.0f}–{auto_threshold:.0f}%** — спорная зона, требует подтверждения владельца.\n"
         f"- **< {manual_threshold:.0f}%** — «не сопоставлено»."
-    )
-    st.caption(
-        "Числовые значения порогов настраиваются на вкладке «Настройки» (этап 10)."
     )
 
 
