@@ -27,10 +27,44 @@ def render() -> None:
     with st.expander("➕ Добавить товар", expanded=False):
         _form_add_product()
 
+    with st.expander("📥 Импорт каталога из CSV", expanded=False):
+        _form_import_csv()
+
     _list_products()
 
     with st.expander("✏️ Изменить товар", expanded=False):
         _form_edit_product()
+
+
+def _form_import_csv() -> None:
+    uploaded = st.file_uploader(
+        "Файл каталога (.csv)",
+        type=["csv"],
+        help="Колонки: sku (или артикул), название, цена, категория (необязательно). "
+        "Повторные SKU пропускаются.",
+    )
+    if uploaded is None:
+        st.info("Загрузите файл. Пример в sample_data/catalog_seed.csv.")
+        return
+
+    if st.button("Импортировать товары", key="catalog_import_run"):
+        conn = _conn()
+        try:
+            result = catalog_service.load_catalog_csv(
+                conn, uploaded.getvalue(), uploaded.name
+            )
+            if result.added:
+                st.success(f"Добавлено товаров: {result.added}.")
+            if result.skipped_sku_exists:
+                st.caption(f"Пропущено (SKU уже в каталоге): {result.skipped_sku_exists}.")
+            if result.errors:
+                with st.expander(f"Ошибки ({len(result.errors)})"):
+                    st.text("\n".join(result.errors))
+            st.rerun()
+        except catalog_service.ValidationError as exc:
+            st.error(str(exc))
+        finally:
+            conn.close()
 
 
 def _form_add_product() -> None:

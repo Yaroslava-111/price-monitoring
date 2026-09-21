@@ -133,3 +133,44 @@ def test_validate_product_returns_error_list(conn):
     assert any("SKU: значение не может быть пустым" in e for e in errors)
     assert any("Название: значение не может быть пустым" in e for e in errors)
     assert any("обязательное числовое значение" in e for e in errors)
+
+
+def test_import_catalog_csv(conn):
+    data = (
+        "sku,название,цена\n"
+        "COF-1,Кофе Арабика,400.00\n"
+        ",Без артикула,10\n"
+        "TEA-1,Чай чёрный,abc\n"
+        "COF-1,Дубль,1\n"
+    ).encode("utf-8")
+    result = catalog_service.load_catalog_csv(conn, data, "catalog.csv")
+    assert result.added == 1
+    assert result.skipped_sku_exists == 1
+    assert len(result.errors) == 2
+    assert any("SKU: значение не может быть пустым" in e for e in result.errors)
+    assert any("не удалось распознать цену" in e for e in result.errors)
+    products = catalog_service.list_products(conn)
+    assert len(products) == 1
+    assert products[0].sku == "COF-1"
+
+
+def test_import_catalog_csv_idempotent(conn):
+    data = "sku,название,цена\nA-1,Первый,10\n".encode("utf-8")
+    first = catalog_service.load_catalog_csv(conn, data, "catalog.csv")
+    second = catalog_service.load_catalog_csv(conn, data, "catalog.csv")
+    assert first.added == 1
+    assert second.added == 0
+    assert second.skipped_sku_exists == 1
+    assert len(catalog_service.list_products(conn)) == 1
+
+
+def test_import_catalog_csv_missing_columns(conn):
+    with pytest.raises(ValidationError):
+        catalog_service.load_catalog_csv(
+            conn, "sku,цена\nA-1,10\n".encode("utf-8"), "c.csv"
+        )
+
+
+def test_import_catalog_csv_rejects_xlsx(conn):
+    with pytest.raises(ValidationError):
+        catalog_service.load_catalog_csv(conn, b"x", "catalog.xlsx")
