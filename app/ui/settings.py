@@ -164,11 +164,23 @@ def _list_sources() -> None:
             "URL": s.origin_url or "—",
             "Атрибуция": "да" if s.requires_attribution else "нет",
             "Интервал, мин": s.min_refresh_minutes,
-            "Статус": _status_badge(s.status),
+            "Статус": STATUS_LABELS[s.status],
         }
         for s in sources
     ]
-    st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+    df = pd.DataFrame(rows)
+
+    # st.dataframe не понимает разметку `:red[...]` внутри ячеек — она
+    # рендерится только в markdown (st.success/st.error). Цвет статуса
+    # здесь красится через pandas Styler, который st.dataframe умеет.
+    hex_by_color = {"green": "#1a7f37", "red": "#cf222e", "orange": "#9a6700"}
+    row_colors = [hex_by_color.get(STATUS_COLORS.get(s.status, ""), "#57606a") for s in sources]
+
+    styled = df.style.apply(
+        lambda _col: [f"color:{c};font-weight:600" for c in row_colors],
+        subset=["Статус"],
+    )
+    st.dataframe(styled, width="stretch", hide_index=True)
 
 
 def _form_edit_source() -> None:

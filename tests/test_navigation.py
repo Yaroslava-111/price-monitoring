@@ -65,3 +65,25 @@ def test_menu_title_matches_screen_header():
     """Название пункта меню и заголовок экрана не должны расходиться."""
     for path, title, _icon, _url in _nav_items():
         assert EXPECTED_HEADER[path] == title, path
+
+
+def test_default_page_has_empty_url_path():
+    """Streamlit игнорирует url_path у страницы по умолчанию и всегда отдаёт
+    ей корневой адрес "/". Если явно указать что-то другое, Streamlit это
+    молча проигнорирует, но прямой переход по «красивому» пути покажет
+    тост «Page not found» (с откатом на верную страницу) — воспроизведено
+    на живом приложении при подготовке скриншотов для README.
+    """
+    items = [item for group in NAV.values() for item in group]
+    defaults = [item for item in items if item[0] == "screens/catalog.py"]
+    assert len(defaults) == 1
+    _path, _title, _icon, url_path = defaults[0]
+    assert url_path == ""
+
+
+def test_only_one_page_has_empty_url_path():
+    """Ровно одна страница может быть «безадресной» — иначе неоднозначно,
+    какая из них default."""
+    items = [item for group in NAV.values() for item in group]
+    empty = [item for item in items if item[3] == ""]
+    assert len(empty) == 1
