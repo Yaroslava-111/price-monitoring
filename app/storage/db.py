@@ -16,6 +16,9 @@ DEFAULT_SETTINGS: dict[str, str] = {
     "agent_model": "",
     "max_upload_mb": "20",
     "max_upload_rows": "50000",
+    "telegram_bot_token": "",
+    "telegram_chat_id": "",
+    "telegram_alert_threshold_pct": "15",
 }
 
 

@@ -37,8 +37,8 @@ def render() -> None:
     st.header("Настройки")
     st.caption("Реестр источников данных и параметры сопоставления.")
 
-    tab_sources, tab_rules, tab_agent = st.tabs(
-        ["Источники", "Правила сопоставления", "ИИ-агент"]
+    tab_sources, tab_rules, tab_agent, tab_telegram = st.tabs(
+        ["Источники", "Правила сопоставления", "ИИ-агент", "Telegram"]
     )
 
     with tab_sources:
@@ -50,6 +50,9 @@ def render() -> None:
     with tab_agent:
         _agent_section()
 
+    with tab_telegram:
+        _telegram_section()
+
 
 def _sources_section() -> None:
     st.subheader("Реестр источников")
@@ -58,12 +61,16 @@ def _sources_section() -> None:
         "Источник вводится с условиями использования и явным подтверждением."
     )
 
-    with st.expander("➕ Добавить источник", expanded=False):
+    with st.expander(
+        "Добавить источник", expanded=False, icon=":material/add:"
+    ):
         _form_add_source()
 
     _list_sources()
 
-    with st.expander("✏️ Изменить источник", expanded=False):
+    with st.expander(
+        "Изменить источник", expanded=False, icon=":material/edit:"
+    ):
         _form_edit_source()
 
 
@@ -111,7 +118,7 @@ def _form_add_source() -> None:
             "Условия использования изучены, использование разрешено",
             help="Без подтверждения источник получит статус «Заблокирован»",
         )
-        submitted = st.form_submit_button("Добавить источник")
+        submitted = st.form_submit_button("Добавить источник", icon=":material/add:")
 
     if submitted:
         conn = _conn()
@@ -226,8 +233,12 @@ def _form_edit_source() -> None:
             value=source.terms_agreed,
         )
         col_a, col_b = st.columns(2)
-        save = col_a.form_submit_button("Сохранить изменения")
-        delete = col_b.form_submit_button("Удалить источник")
+        save = col_a.form_submit_button(
+            "Сохранить изменения", icon=":material/save:"
+        )
+        delete = col_b.form_submit_button(
+            "Удалить источник", icon=":material/delete:"
+        )
 
     if save:
         conn = _conn()
@@ -264,42 +275,72 @@ def _form_edit_source() -> None:
             conn.close()
 
 
+def agent_status(conn) -> tuple[bool, str]:
+    """(работает ли реальный агент, текст статуса) — для Настроек и экранов."""
+    from app.services.agent import load_agent
+
+    adapter = load_agent(conn)
+    if adapter.is_live:
+        return True, f"Агент подключён: обоснования пишет модель «{adapter.model}»."
+    gaps = ", ".join(adapter.config.missing())
+    return False, (
+        "Режим-заглушка: обращения к Timeweb не происходит, тексты собираются "
+        f"локально по шаблону. Не заданы: {gaps}."
+    )
+
+
 def _agent_section() -> None:
     st.subheader("Параметры ИИ-агента (Timeweb)")
-    st.markdown(
-        "- Все вызовы агента проходят через `AgentAdapter` и логируются в `agent_log`.\n"
-        "- Рекомендации агента — **не решения**: владелец применяет их вручную.\n"
-        "- Мок-режим: пока endpoint пустой — ответы генерируются детерминированно локально."
-    )
 
     conn = _conn()
     try:
+        live, status_text = agent_status(conn)
         endpoint = settings_service.get_setting(conn, "agent_endpoint")
         api_key = settings_service.get_setting(conn, "agent_key")
         model = settings_service.get_setting(conn, "agent_model")
     finally:
         conn.close()
 
+    if live:
+        st.success(status_text)
+    else:
+        st.warning(status_text)
+
+    st.markdown(
+        "- Отбор позиций и все расчёты выполняются локально — модель пишет "
+        "только текст обоснования.\n"
+        "- Рекомендации агента — **не решения**: владелец применяет их вручную.\n"
+        "- Каждый вызов логируется в `agent_log` с пометкой режима."
+    )
+
     endpoint_new = st.text_input(
         "Эндпоинт Timeweb",
         value=endpoint,
-        placeholder="https://…/api (пусто = мок-режим)",
+        placeholder="https://agent.timeweb.cloud/api/v1/cloud-ai/agents/<id>/v1",
         key="agent_endpoint_input",
+        icon=":material/link:",
     )
     api_key_new = st.text_input(
         "API-ключ",
         value=api_key,
         type="password",
         key="agent_key_input",
+        icon=":material/key:",
+        help="Хранится в локальной базе db/monitoring.db открытым текстом.",
     )
     model_new = st.text_input(
         "Модель",
         value=model,
-        placeholder="например: timeweb-ai/gpt-…",
+        placeholder="имя модели из панели Timeweb — без него запрос не уйдёт",
         key="agent_model_input",
+        icon=":material/auto_awesome:",
     )
 
-    if st.button("💾 Сохранить параметры агента", key="agent_save"):
+    col_save, col_check = st.columns([1, 1])
+
+    if col_save.button(
+        "Сохранить параметры агента", key="agent_save", icon=":material/save:"
+    ):
         conn = _conn()
         try:
             settings_service.set_setting(conn, "agent_endpoint", endpoint_new.strip())
@@ -309,6 +350,169 @@ def _agent_section() -> None:
             st.rerun()
         finally:
             conn.close()
+
+    if col_check.button(
+        "Проверить подключение", key="agent_check", icon=":material/power:"
+    ):
+        _check_agent_connection()
+
+
+def _check_agent_connection() -> None:
+    """Короткий проверочный запрос к модели сохранёнными параметрами."""
+    from app.services.agent import AgentError, load_agent
+
+    conn = _conn()
+    try:
+        adapter = load_agent(conn)
+        with st.spinner("Отправляю проверочный запрос…"):
+            try:
+                answer = adapter.check_connection()
+            except AgentError as exc:
+                st.error(f"Связи нет. {exc}")
+                st.caption(
+                    "Проверьте эндпоинт, ключ и имя модели, затем нажмите "
+                    "«Сохранить параметры агента» и повторите проверку."
+                )
+                return
+        st.success(f"Связь есть. Модель ответила: «{answer[:200]}»")
+    finally:
+        conn.close()
+
+
+def telegram_status(conn) -> tuple[bool, str]:
+    """(настроен ли Telegram, текст статуса) — для Настроек."""
+    from app.services import notifications
+
+    cfg = notifications.config(conn)
+    if cfg.configured:
+        threshold = notifications.alert_threshold(conn)
+        return True, (
+            f"Уведомления включены: сообщение уйдёт, если конкурент дешевле "
+            f"вас более чем на {threshold:.0f}%."
+        )
+    gaps = ", ".join(cfg.missing())
+    return False, f"Уведомления выключены. Не заданы: {gaps}."
+
+
+def _telegram_section() -> None:
+    from app.core.report import clamp_threshold
+
+    st.subheader("Уведомления в Telegram")
+
+    # st.rerun() сразу после сохранения обрывает текущий прогон — сообщение,
+    # выведенное перед ним, до экрана не доезжает. Поэтому текст кладётся в
+    # session_state и показывается один раз уже на следующем прогоне.
+    saved_message = st.session_state.pop("telegram_save_message", None)
+    if saved_message:
+        st.success(saved_message)
+
+    conn = _conn()
+    try:
+        live, status_text = telegram_status(conn)
+        bot_token = settings_service.get_setting(conn, "telegram_bot_token")
+        chat_id = settings_service.get_setting(conn, "telegram_chat_id")
+        threshold = float(
+            settings_service.get_setting(conn, "telegram_alert_threshold_pct") or "15"
+        )
+    finally:
+        conn.close()
+
+    if live:
+        st.success(status_text)
+    else:
+        st.warning(status_text)
+
+    st.markdown(
+        "- Проверяется только контур **«Конкуренты»** — сразу после каждого импорта.\n"
+        "- Сообщение уходит один раз на загрузку: повторный импорт того же файла "
+        "новых цен не создаёт и уведомление не дублирует.\n"
+        "- Токен и chat_id хранятся в локальной базе `db/monitoring.db` "
+        "открытым текстом."
+    )
+
+    with st.expander(
+        "Как завести бота и узнать chat_id",
+        key="telegram_help",
+        icon=":material/help:",
+    ):
+        st.markdown(
+            "1. В Telegram откройте **@BotFather**, отправьте `/newbot` "
+            "и следуйте подсказкам — в конце придёт токен вида "
+            "`123456789:AAExampleTokenTextHere`.\n"
+            "2. Напишите вашему новому боту любое сообщение — иначе он не "
+            "сможет писать вам первым.\n"
+            "3. Откройте `https://api.telegram.org/bot<ТОКЕН>/getUpdates` "
+            "в браузере (подставив свой токен) и найдите поле `\"chat\":{\"id\": ...}` "
+            "— это и есть chat_id.\n"
+            "4. Для группового чата добавьте бота в группу и отправьте туда "
+            "сообщение — chat_id для групп отрицательный."
+        )
+
+    bot_token_new = st.text_input(
+        "Токен бота",
+        value=bot_token,
+        type="password",
+        key="telegram_token_input",
+        placeholder="получен от @BotFather",
+    )
+    chat_id_new = st.text_input(
+        "Chat ID",
+        value=chat_id,
+        key="telegram_chat_input",
+        placeholder="ваш личный или групповой chat_id",
+    )
+    threshold_new = st.number_input(
+        "Критический порог, %",
+        min_value=0,
+        max_value=100,
+        value=int(clamp_threshold(threshold)),
+        step=1,
+        help="Уведомление уходит, если конкурент дешевле вашей цены более чем на этот процент.",
+        key="telegram_threshold_input",
+    )
+
+    col_save, col_check = st.columns([1, 1])
+
+    if col_save.button(
+        "Сохранить параметры Telegram", key="telegram_save"
+    ):
+        conn = _conn()
+        try:
+            settings_service.set_setting(conn, "telegram_bot_token", bot_token_new.strip())
+            settings_service.set_setting(conn, "telegram_chat_id", chat_id_new.strip())
+            settings_service.set_setting(
+                conn, "telegram_alert_threshold_pct", str(int(clamp_threshold(threshold_new)))
+            )
+            st.session_state["telegram_save_message"] = "Параметры Telegram сохранены."
+            st.rerun()
+        finally:
+            conn.close()
+
+    if col_check.button(
+        "Отправить тестовое сообщение", key="telegram_check"
+    ):
+        _check_telegram_connection()
+
+
+def _check_telegram_connection() -> None:
+    from app.services import notifications, telegram
+
+    conn = _conn()
+    try:
+        cfg = notifications.config(conn)
+        with st.spinner("Отправляю тестовое сообщение…"):
+            try:
+                telegram.send_test(cfg)
+            except telegram.TelegramError as exc:
+                st.error(f"Не отправлено. {exc}")
+                st.caption(
+                    "Проверьте токен и chat_id, затем нажмите «Сохранить параметры "
+                    "Telegram» и повторите проверку."
+                )
+                return
+        st.success("Сообщение отправлено — проверьте чат в Telegram.")
+    finally:
+        conn.close()
 
 
 def _rules_section() -> None:
@@ -332,6 +536,7 @@ def _rules_section() -> None:
         value=int(float(default.get("auto_threshold", "90"))),
         step=1,
         key="settings_auto_threshold",
+        icon=":material/percent:",
     )
     manual_threshold = st.number_input(
         "Ручной порог (manual), %",
@@ -340,11 +545,14 @@ def _rules_section() -> None:
         value=int(float(default.get("manual_threshold", "70"))),
         step=1,
         key="settings_manual_threshold",
+        icon=":material/percent:",
     )
 
     if manual_threshold >= auto_threshold:
         st.error("Ручной порог должен быть строго меньше автоматического.")
-    elif st.button("💾 Сохранить пороги", key="thresholds_save"):
+    elif st.button(
+        "Сохранить пороги", key="thresholds_save", icon=":material/save:"
+    ):
         conn = _conn()
         try:
             settings_service.set_setting(conn, "auto_threshold", str(int(auto_threshold)))
