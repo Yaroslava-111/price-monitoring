@@ -8,6 +8,10 @@ import streamlit as st
 from app.core.suppliers import diff_percent, pick_cheapest
 from app.services import suppliers as suppliers_service
 from app.storage.db import get_connection
+from app.ui import agent_block
+
+
+RAW_LABEL = "Разовый файл (поставщики)"
 
 
 def _conn() -> sqlite3.Connection:
@@ -41,9 +45,15 @@ def render() -> None:
     try:
         categories = suppliers_service.list_supplier_categories(conn)
         suppliers = suppliers_service.list_supplier_sources(conn)
+        has_raw = suppliers_service.has_raw_supplier_prices(conn)
         products = suppliers_service.list_products_with_supplier_prices(conn)
 
-        with st.expander("🔽 Выбор фильтров", expanded=True):
+        with st.expander(
+            "Выбор фильтров",
+            expanded=True,
+            key="suppliers_filters",
+            icon=":material/filter_alt:",
+        ):
             category_selected = st.selectbox(
                 "Категория",
                 ["(все категории)"] + categories,
@@ -51,14 +61,19 @@ def render() -> None:
             )
             category = "" if category_selected == "(все категории)" else category_selected
 
-            supplier_labels = ["(все поставщики)"] + [s["name"] for s in suppliers]
+            supplier_labels = ["(все поставщики)"]
+            if has_raw:
+                supplier_labels.append(RAW_LABEL)
+            supplier_labels += [s["name"] for s in suppliers]
             supplier_name = st.selectbox(
                 "Поставщик",
                 supplier_labels,
                 key="suppliers_source",
             )
             source_id = None
-            if supplier_name != "(все поставщики)":
+            if supplier_name == RAW_LABEL:
+                source_id = suppliers_service.RAW_SOURCE_ID
+            elif supplier_name != "(все поставщики)":
                 source_id = next(s["id"] for s in suppliers if s["name"] == supplier_name)
 
             date_selection = st.date_input(
@@ -164,31 +179,17 @@ def render() -> None:
             st.success(msg)
 
         st.download_button(
-            "⬇️ Скачать CSV (последние цены)",
+            "Скачать CSV (последние цены)",
+            key="suppliers_download",
+            icon=":material/download:",
             data=_matrix_csv(items).encode("utf-8-sig"),
             file_name="suppliers.csv",
             mime="text/csv",
         )
 
-        _agent_block(conn)
+        agent_block.render(conn, "supplier", "source_switch")
     finally:
         conn.close()
-
-
-def _agent_block(conn: sqlite3.Connection) -> None:
-    from app.services.agent import AgentError, load_agent
-
-    if st.button("🤖 Запросить рекомендации агента", key="agents_suppliers"):
-        with st.spinner("Агент анализирует прайсы поставщиков…"):
-            try:
-                recs = load_agent(conn).analyze_prices("supplier")
-                st.success(
-                    f"Агент подготовил {len(recs)} рекомендаций по закупке."
-                )
-            except AgentError as exc:
-                st.error(str(exc))
-            finally:
-                st.rerun()
 
 
 def _matrix_csv(items: list[dict]) -> str:
