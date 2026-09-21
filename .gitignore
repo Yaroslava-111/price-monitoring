@@ -5,3 +5,4 @@ __pycache__/
 db/
 .DS_Store
 tests/_*.log
+.playwright-mcp/
