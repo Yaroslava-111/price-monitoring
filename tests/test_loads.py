@@ -227,3 +227,41 @@ def test_thresholds_from_settings_affect_import(conn):
     m = conn.execute("SELECT * FROM mappings").fetchone()
     assert m["status"] == "auto"
     assert m["method"] == "fuzzy"
+
+def test_raw_files_of_different_scope_do_not_collide(conn):
+    """Разовый прайс конкурента и разовый прайс поставщика на один SKU и
+    одну дату — это две разные строки, а не дубль.
+
+    Оба грузятся без регистрации источника (source_id IS NULL), и раньше
+    контур не входил в ключ проверки повторов: вторая загрузка молча
+    считалась дублем и цена поставщика вообще не попадала в базу.
+    """
+    catalog_service.create_product(conn, "COF-1", "Кофе Арабика 250г", 400.0)
+
+    competitor_csv = _csv_bytes([["sku", "цена", "дата"], ["COF-1", "340.00", "2026-09-22"]])
+    supplier_csv = _csv_bytes([["sku", "закупка", "дата"], ["COF-1", "310.00", "2026-09-22"]])
+
+    comp_result = loads_service.run_import(conn, competitor_csv, "c.csv", "competitor")
+    sup_result = loads_service.run_import(conn, supplier_csv, "s.csv", "supplier")
+
+    assert comp_result.ok_rows == 1
+    assert sup_result.ok_rows == 1
+    assert sup_result.duplicate_rows == 0
+
+    rows = conn.execute(
+        "SELECT price FROM prices ORDER BY id"
+    ).fetchall()
+    assert [r["price"] for r in rows] == [340.0, 310.0]
+
+
+def test_same_scope_raw_files_still_deduplicate(conn):
+    """А вот повтор в ОДНОМ и том же контуре по-прежнему считается дублем."""
+    catalog_service.create_product(conn, "COF-1", "Кофе Арабика 250г", 400.0)
+    data = _csv_bytes([["sku", "цена", "дата"], ["COF-1", "340.00", "2026-09-22"]])
+
+    first = loads_service.run_import(conn, data, "c1.csv", "competitor")
+    second = loads_service.run_import(conn, data, "c2.csv", "competitor")
+
+    assert first.ok_rows == 1
+    assert second.ok_rows == 0
+    assert second.duplicate_rows == 1

@@ -167,23 +167,37 @@ def _normalize_currency(value) -> str:
 
 
 def _existing_keys(
-    conn: sqlite3.Connection, source_id: int | None
-) -> set[tuple[int | None, str, str]]:
+    conn: sqlite3.Connection, source_id: int | None, scope: str
+) -> set[tuple[int | None, str, str, str]]:
+    """Ключи уже загруженных цен: (source_id, контур, внешний ключ, дата).
+
+    Контур входит в ключ намеренно. У разовых файлов source_id всегда NULL,
+    а UNIQUE-индекс `idx_prices_uniq` в SQLite не считает два NULL равными
+    и эту коллизию не ловит на уровне БД — без контура в ключе цена
+    конкурента и закупочная цена поставщика с одинаковым SKU и датой
+    совпадали бы, и вторая молча помечалась бы как повтор и не сохранялась.
+    """
     rows = fetch_all(
         conn,
-        "SELECT external_key, price_date, source_id FROM prices",
+        """
+        SELECT pr.external_key, pr.price_date, pr.source_id, l.scope AS load_scope
+        FROM prices pr
+        JOIN loads l ON l.id = pr.load_id
+        """,
     )
-    keys: set[tuple[int | None, str, str]] = set()
+    keys: set[tuple[int | None, str, str, str]] = set()
     for row in rows:
         sid = row["source_id"]
         if source_id is None:
-            if sid is not None:
+            if sid is not None or row["load_scope"] != scope:
                 continue
-            keys.add((None, row["external_key"], row["price_date"]))
+            keys.add((None, scope, row["external_key"], row["price_date"]))
         else:
             if sid != source_id:
                 continue
-            keys.add((source_id, row["external_key"], row["price_date"]))
+            keys.add(
+                (source_id, row["load_scope"], row["external_key"], row["price_date"])
+            )
     return keys
 
 
@@ -241,7 +255,7 @@ def run_import(
         for p in products
     ]
 
-    existing = _existing_keys(conn, source_id)
+    existing = _existing_keys(conn, source_id, scope)
 
     file_hash = hashlib.sha256(data).hexdigest()
     cur = conn.execute(
@@ -307,7 +321,7 @@ def run_import(
             error_rows += 1
             continue
 
-        key = (source_id, external_sku, price_date)
+        key = (source_id, scope, external_sku, price_date)
         if key in existing:
             duplicate_rows += 1
             continue
@@ -446,3 +460,8 @@ def list_loads(conn: sqlite3.Connection, limit: int = 20) -> list[dict]:
         (limit,),
     )
     return [dict(r) for r in rows]
+
+
+def count_loads(conn: sqlite3.Connection) -> int:
+    """Сколько всего загрузок — чтобы знать, есть ли что догружать."""
+    return int(fetch_all(conn, "SELECT COUNT(*) AS c FROM loads")[0]["c"])

@@ -182,3 +182,97 @@ def test_product_series(conn):
     assert all("source_name" in s for s in series)
     dates = [s["price_date"] for s in series]
     assert dates == sorted(dates)
+
+def _raw_price(conn, product, ext, price, price_date, load_id):
+    """Цена из разового файла: без source_id, контур берётся из loads.scope."""
+    from app.services import matching as matching_service
+
+    matching_service.upsert_mapping(
+        conn,
+        product_id=product.id,
+        external_key=ext,
+        external_name=ext,
+        method="exact",
+        similarity=100.0,
+        status="confirmed",
+    )
+    conn.execute(
+        """
+        INSERT INTO prices (product_id, source_id, load_id, price, price_date, external_key)
+        VALUES (?, NULL, ?, ?, ?, ?)
+        """,
+        (product.id, load_id, price, price_date, ext),
+    )
+
+
+def test_raw_file_supplier_prices_visible(conn):
+    """Прайс, загруженный разовым файлом (без регистрации источника), виден."""
+    from app.services import catalog as catalog_service
+
+    p = catalog_service.create_product(
+        conn, "SKU-RAW", "Кефир 1л", 90.0, category="Молочка"
+    )
+    load_id = conn.execute(
+        "INSERT INTO loads (source_id, scope, kind, status) "
+        "VALUES (NULL, 'supplier', 'csv_upload', 'success')"
+    ).lastrowid
+    _raw_price(conn, p, "RAW-1", 55.0, "2026-09-10", load_id)
+    conn.commit()
+
+    rows = supplier_service.latest_prices(conn)
+    assert [(r["sku"], r["price"], r["source_name"]) for r in rows] == [
+        ("SKU-RAW", 55.0, "Разовый файл")
+    ]
+    assert supplier_service.has_raw_supplier_prices(conn) is True
+    assert supplier_service.list_supplier_categories(conn) == ["Молочка"]
+    assert [p["sku"] for p in supplier_service.list_products_with_supplier_prices(conn)] == [
+        "SKU-RAW"
+    ]
+
+    only_raw = supplier_service.latest_prices(
+        conn, source_id=supplier_service.RAW_SOURCE_ID
+    )
+    assert len(only_raw) == 1
+
+
+def test_raw_competitor_prices_not_mixed_into_suppliers(conn):
+    """Разовые цены конкурентов и поставщиков не путаются: у обеих source_id IS NULL."""
+    from app.services import catalog as catalog_service
+
+    p = catalog_service.create_product(
+        conn, "SKU-MIX", "Творог 5%", 100.0, category="Молочка"
+    )
+    sup_load = conn.execute(
+        "INSERT INTO loads (source_id, scope, kind, status) "
+        "VALUES (NULL, 'supplier', 'csv_upload', 'success')"
+    ).lastrowid
+    comp_load = conn.execute(
+        "INSERT INTO loads (source_id, scope, kind, status) "
+        "VALUES (NULL, 'competitor', 'csv_upload', 'success')"
+    ).lastrowid
+    _raw_price(conn, p, "MIX-S", 40.0, "2026-09-01", sup_load)
+    # цена конкурента позже — не должна вытеснить прайс поставщика
+    _raw_price(conn, p, "MIX-C", 95.0, "2026-09-20", comp_load)
+    conn.commit()
+
+    rows = supplier_service.latest_prices(conn)
+    assert [(r["price"], r["source_name"]) for r in rows] == [(40.0, "Разовый файл")]
+
+    stats = supplier_service.stats_for_product(conn, p.id)
+    assert [(s.source_name, s.last_price, s.max_price) for s in stats] == [
+        ("Разовый файл", 40.0, 40.0)
+    ]
+    assert [r["price"] for r in supplier_service.product_series(conn, p.id)] == [40.0]
+
+
+def test_supplier_prices_with_period_filter(conn):
+    """Фильтр по периоду не должен сдвигать привязку параметров запроса."""
+    _seed(conn)
+
+    all_rows = supplier_service.latest_prices(conn)
+    wide = supplier_service.latest_prices(
+        conn, date_from="2000-01-01", date_to="2099-12-31"
+    )
+    assert [(r["sku"], r["price"]) for r in wide] == [
+        (r["sku"], r["price"]) for r in all_rows
+    ]

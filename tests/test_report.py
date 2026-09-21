@@ -178,6 +178,41 @@ def test_supplier_scope_excluded(conn):
     assert len(rows) == 0
 
 
+def test_raw_file_competitor_included(conn):
+    p = catalog_service.create_product(conn, "SKU-7R", "Товар 7R", 100.0, category="Чай")
+    load_id = conn.execute(
+        "INSERT INTO loads (source_id, scope, kind, status) VALUES (NULL, 'competitor', 'csv_upload', 'success')"
+    ).lastrowid
+    _confirmed_mapping(conn, p.id, "SKU-7R")
+    _add_price(conn, p.id, None, "SKU-7R", p.own_price * 0.7, "2026-09-10", load_id)
+    conn.commit()
+
+    rows = report_service.list_deviations(conn, threshold=5.0)
+    assert len(rows) == 1
+    assert rows[0]["source_name"] == "Разовый файл"
+    assert rows[0]["source_id"] is None
+
+    rows = report_service.list_deviations(conn, threshold=5.0, source_id=report_service.RAW_SOURCE_ID)
+    assert len(rows) == 1
+
+    total = report_service.total_deviations(conn)
+    assert total == 1
+
+
+def test_raw_file_supplier_excluded(conn):
+    p = catalog_service.create_product(conn, "SKU-7S", "Товар 7S", 100.0, category="Чай")
+    load_id = conn.execute(
+        "INSERT INTO loads (source_id, scope, kind, status) VALUES (NULL, 'supplier', 'csv_upload', 'success')"
+    ).lastrowid
+    _confirmed_mapping(conn, p.id, "SKU-7S")
+    _add_price(conn, p.id, None, "SKU-7S", p.own_price * 0.7, "2026-09-10", load_id)
+    conn.commit()
+
+    rows = report_service.list_deviations(conn, threshold=5.0)
+    assert rows == []
+    assert report_service.total_deviations(conn) == 0
+
+
 def test_filter_category_source_period(conn):
     p1 = catalog_service.create_product(conn, "SKU-8", "Товар 8", 100.0, category="Кофе")
     p2 = catalog_service.create_product(conn, "SKU-9", "Товар 9", 100.0, category="Чай")
@@ -260,3 +295,58 @@ def test_zero_own_price_excluded(conn):
 
     rows = report_service.list_deviations(conn, threshold=5.0)
     assert len(rows) == 0
+
+def test_period_filter_keeps_rows_in_range(conn):
+    """Широкий период не должен обнулять отчёт.
+
+    Плейсхолдеры SQLite связываются по позиции в тексте запроса: подзапрос
+    «последняя цена» стоит раньше внешнего WHERE, поэтому его параметры должны
+    передаваться первыми. При перепутанном порядке порог попадал в сравнение
+    дат и отчёт всегда выходил пустым.
+    """
+    p = catalog_service.create_product(
+        conn, "SKU-PD", "Товар PD", 100.0, category="Чай"
+    )
+    src = _src(conn, "К-PD")
+    load_id = _load(conn, src)
+    _confirmed_mapping(conn, p.id, "SKU-PD")
+    _add_price(conn, p.id, src, "SKU-PD", 70.0, "2026-09-10", load_id)
+    conn.commit()
+
+    unfiltered = report_service.list_deviations(conn, threshold=5.0)
+    assert len(unfiltered) == 1
+
+    wide = report_service.list_deviations(
+        conn, threshold=5.0, date_from="2000-01-01", date_to="2099-12-31"
+    )
+    assert [r["sku"] for r in wide] == ["SKU-PD"]
+
+    outside = report_service.list_deviations(
+        conn, threshold=5.0, date_from="2026-10-01", date_to="2026-10-31"
+    )
+    assert outside == []
+
+
+def test_raw_supplier_price_does_not_displace_competitor(conn):
+    """Разовая цена поставщика не должна вытеснять разовую цену конкурента."""
+    p = catalog_service.create_product(
+        conn, "SKU-MIXC", "Товар MIXC", 100.0, category="Чай"
+    )
+    comp_load = conn.execute(
+        "INSERT INTO loads (source_id, scope, kind, status) "
+        "VALUES (NULL, 'competitor', 'csv_upload', 'success')"
+    ).lastrowid
+    sup_load = conn.execute(
+        "INSERT INTO loads (source_id, scope, kind, status) "
+        "VALUES (NULL, 'supplier', 'csv_upload', 'success')"
+    ).lastrowid
+    _confirmed_mapping(conn, p.id, "MIXC-C")
+    _confirmed_mapping(conn, p.id, "MIXC-S")
+    _add_price(conn, p.id, None, "MIXC-C", 80.0, "2026-09-01", comp_load)
+    # прайс поставщика позже по дате, но в отчёт конкурентов попадать не должен
+    _add_price(conn, p.id, None, "MIXC-S", 40.0, "2026-09-20", sup_load)
+
+    conn.commit()
+
+    rows = report_service.list_deviations(conn, threshold=5.0)
+    assert [(r["sku"], r["price"]) for r in rows] == [("SKU-MIXC", 80.0)]
