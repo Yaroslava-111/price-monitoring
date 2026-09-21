@@ -69,7 +69,7 @@ def _seed(conn):
 def test_history_screen_empty(conn):
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("История")
+    at.switch_page("screens/history.py")
     at.run()
     assert not list(at.exception)
 
@@ -78,7 +78,7 @@ def test_history_screen_table_and_download(conn):
     _seed(conn)
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("История")
+    at.switch_page("screens/history.py")
     at.run()
     assert not list(at.exception)
 

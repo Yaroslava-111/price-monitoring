@@ -16,7 +16,7 @@ def _conn() -> sqlite3.Connection:
 
 
 def render() -> None:
-    st.header("История цены товара")
+    st.header("История цен")
     st.caption(
         "График цены по датам с атрибуцией источника. "
         "Точки окрашены по источнику, ховер показывает дату, цену и источник."
@@ -81,7 +81,9 @@ def render() -> None:
         )
 
         st.download_button(
-            "⬇️ Скачать CSV",
+            "Скачать CSV",
+            key="history_download",
+            icon=":material/download:",
             data=history_csv(df).encode("utf-8-sig"),
             file_name="history.csv",
             mime="text/csv",

@@ -74,7 +74,7 @@ def _save_threshold(conn: sqlite3.Connection, threshold: float) -> None:
 
 
 def render() -> None:
-    st.header("Отчёт: конкуренты")
+    st.header("Конкуренты: отклонения")
     st.caption(
         "Только позиции, где цена конкурента ниже вашей более чем на порог N%. "
         "Источник и дата цены указаны для каждой строки."

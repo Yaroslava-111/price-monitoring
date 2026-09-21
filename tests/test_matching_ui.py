@@ -69,7 +69,7 @@ def _seed_two_mappings(conn):
 def test_matching_screen_empty(conn):
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Сопоставление")
+    at.switch_page("screens/matching.py")
     at.run()
     assert not list(at.exception)
 
@@ -80,7 +80,7 @@ def test_matching_screen_confirm_rejects(conn):
 
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Сопоставление")
+    at.switch_page("screens/matching.py")
     at.run()
     assert not list(at.exception)
 
@@ -113,7 +113,7 @@ def test_matching_reject_blacklists(conn):
 
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Сопоставление")
+    at.switch_page("screens/matching.py")
     at.run()
 
     buttons = {b.key: b for b in at.button}
@@ -145,7 +145,7 @@ def test_matching_pagination_buttons(conn):
 
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Сопоставление")
+    at.switch_page("screens/matching.py")
     at.run()
     assert not list(at.exception)
     keys = [b.key for b in at.button]

@@ -15,7 +15,7 @@ def conn(tmp_path, monkeypatch):
 
 
 def _open_catalog(at: AppTest) -> AppTest:
-    at.radio[0].set_value("Каталог")
+    at.switch_page("screens/catalog.py")
     at.run()
     return at
 

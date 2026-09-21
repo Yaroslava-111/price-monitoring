@@ -60,7 +60,7 @@ def _seed(conn):
 def test_report_screen_empty(conn):
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Отчёт: конкуренты")
+    at.switch_page("screens/report.py")
     at.run()
     assert not list(at.exception)
 
@@ -69,7 +69,7 @@ def test_report_shows_only_below_threshold(conn):
     _seed(conn)
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Отчёт: конкуренты")
+    at.switch_page("screens/report.py")
     at.run()
     assert not list(at.exception)
 
@@ -91,7 +91,7 @@ def test_report_slider_changes_results(conn):
     _seed(conn)
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Отчёт: конкуренты")
+    at.switch_page("screens/report.py")
     at.run()
 
     slider = at.slider[0]
@@ -106,7 +106,7 @@ def test_report_download_button(conn):
     _seed(conn)
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Отчёт: конкуренты")
+    at.switch_page("screens/report.py")
     at.run()
     assert not list(at.exception)
 
@@ -117,7 +117,7 @@ def test_report_category_filter(conn):
     _seed(conn)
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Отчёт: конкуренты")
+    at.switch_page("screens/report.py")
     at.run()
 
     category_select = at.selectbox[0]

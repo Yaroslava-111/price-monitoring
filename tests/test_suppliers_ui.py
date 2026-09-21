@@ -64,7 +64,7 @@ def _seed(conn):
 def test_suppliers_screen_empty(conn):
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Прайсы: поставщики")
+    at.switch_page("screens/suppliers.py")
     at.run()
     assert not list(at.exception)
 
@@ -73,7 +73,7 @@ def test_suppliers_matrix_and_summary(conn):
     _seed(conn)
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Прайсы: поставщики")
+    at.switch_page("screens/suppliers.py")
     at.run()
     assert not list(at.exception)
 
@@ -106,7 +106,7 @@ def test_suppliers_product_select(conn):
     _seed(conn)
     at = AppTest.from_file(MAIN_SCRIPT, default_timeout=30)
     at.run()
-    at.radio[0].set_value("Прайсы: поставщики")
+    at.switch_page("screens/suppliers.py")
     at.run()
 
     product_box = None

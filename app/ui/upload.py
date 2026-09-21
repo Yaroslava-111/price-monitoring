@@ -15,7 +15,7 @@ def _conn() -> sqlite3.Connection:
 
 
 def render() -> None:
-    st.header("Загрузка данных")
+    st.header("Загрузка цен")
     st.caption("CSV/XLSX из разрешённого источника или разовый файл.")
 
     conn = _conn()

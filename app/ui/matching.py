@@ -74,7 +74,7 @@ def render() -> None:
                     )
 
                 if mid.get("ai_recommended"):
-                    st.info("🤖 Рекомендация агента: этот товар.")
+                    st.info("Рекомендация агента: этот товар.")
                 else:
                     st.caption("Предложено системой (фаззи-сопоставление).")
 
@@ -93,9 +93,21 @@ def render() -> None:
                 )
 
                 col1, col2, col3 = st.columns([1, 1, 3])
-                confirm = col1.button("Подтвердить", key=f"mapping_{mid['id']}_confirm")
-                reject = col2.button("Отклонить", key=f"mapping_{mid['id']}_reject")
-                ask_agent = col3.button("🤖 Спросить агента", key=f"mapping_{mid['id']}_agent")
+                confirm = col1.button(
+                    "Подтвердить",
+                    key=f"mapping_{mid['id']}_confirm",
+                    icon=":material/check:",
+                )
+                reject = col2.button(
+                    "Отклонить",
+                    key=f"mapping_{mid['id']}_reject",
+                    icon=":material/close:",
+                )
+                ask_agent = col3.button(
+                    "Спросить агента",
+                    key=f"mapping_{mid['id']}_agent",
+                    icon=":material/auto_awesome:",
+                )
                 if ask_agent:
                     with st.spinner("Агент думает…"):
                         try:

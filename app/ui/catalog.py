@@ -24,15 +24,17 @@ def render() -> None:
         "Собственные товары и цены. SKU — артикул, по которому сопоставляются внешние данные."
     )
 
-    with st.expander("➕ Добавить товар", expanded=False):
+    with st.expander("Добавить товар", expanded=False, icon=":material/add:"):
         _form_add_product()
 
-    with st.expander("📥 Импорт каталога из CSV", expanded=False):
+    with st.expander(
+        "Импорт каталога из CSV", expanded=False, icon=":material/upload:"
+    ):
         _form_import_csv()
 
     _list_products()
 
-    with st.expander("✏️ Изменить товар", expanded=False):
+    with st.expander("Изменить товар", expanded=False, icon=":material/edit:"):
         _form_edit_product()
 
 
@@ -47,7 +49,11 @@ def _form_import_csv() -> None:
         st.info("Загрузите файл. Пример в sample_data/catalog_seed.csv.")
         return
 
-    if st.button("Импортировать товары", key="catalog_import_run"):
+    if st.button(
+            "Импортировать товары",
+            key="catalog_import_run",
+            icon=":material/upload:",
+        ):
         conn = _conn()
         try:
             result = catalog_service.load_catalog_csv(
@@ -80,7 +86,7 @@ def _form_add_product() -> None:
             step=0.01,
             format="%.2f",
         )
-        submitted = st.form_submit_button("Добавить товар")
+        submitted = st.form_submit_button("Добавить товар", icon=":material/add:")
 
     if submitted:
         conn = _conn()
@@ -157,8 +163,12 @@ def _form_edit_product() -> None:
         )
         is_active = st.checkbox("Товар активен", value=product.is_active)
         col1, col2 = st.columns(2)
-        save = col1.form_submit_button("Сохранить изменения")
-        delete = col2.form_submit_button("Удалить товар")
+        save = col1.form_submit_button(
+            "Сохранить изменения", icon=":material/save:"
+        )
+        delete = col2.form_submit_button(
+            "Удалить товар", icon=":material/delete:"
+        )
 
     if save:
         conn = _conn()
