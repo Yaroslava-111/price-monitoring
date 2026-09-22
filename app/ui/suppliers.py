@@ -13,6 +13,28 @@ from app.ui import agent_block
 
 RAW_LABEL = "Разовый файл (поставщики)"
 
+# Как на остальных экранах: на телефоне широкие таблицы «товар × поставщик»
+# и сводки по товару превращаются в карточки, на десктопе остаются таблицами.
+# Скрытие свойственно каждому блоку отдельно через ключевые контейнеры.
+_SUPPLIERS_CSS = """
+<style>
+@media (max-width: 767px) {
+  .st-key-suppliers_cards_matrix_phone,
+  .st-key-suppliers_cards_stats_phone { display: block !important; }
+  .st-key-suppliers_matrix_phone [data-testid="stDataFrame"] { display: none !important; }
+  .st-key-suppliers_stats_phone [data-testid="stDataFrame"] { display: none !important; }
+}
+@media (min-width: 768px) {
+  .st-key-suppliers_cards_matrix_phone,
+  .st-key-suppliers_cards_stats_phone { display: none !important; }
+}
+</style>
+"""
+
+
+def _fmt_price(v: float) -> str:
+    return f"{v:,.2f} ₽".replace(",", " ")
+
 
 def _conn() -> sqlite3.Connection:
     return get_connection()
@@ -31,7 +53,39 @@ def _render_matrix(items: list[dict]) -> None:
     pivot = pivot.rename(
         columns={"product_id": "ID", "sku": "SKU", "product_name": "Товар"}
     )
-    st.dataframe(pivot, width="stretch", hide_index=True)
+    with st.container(key="suppliers_matrix_phone"):
+        st.dataframe(pivot, width="stretch", hide_index=True)
+    with st.container(key="suppliers_cards_matrix_phone"):
+        _matrix_cards(items)
+
+
+def _matrix_cards(items: list[dict]) -> None:
+    """Матрица «товар × поставщик» карточками — на телефоне читается целиком."""
+    by_product: dict[int, list[dict]] = {}
+    for it in items:
+        by_product.setdefault(it["product_id"], []).append(it)
+    for rows in by_product.values():
+        first = rows[0]
+        with st.container(border=True):
+            st.markdown(f"**{first['product_name']}** — {first['sku']}")
+            for r in rows:
+                st.caption(
+                    f"{r['source_name']}: {_fmt_price(r['price'])} "
+                    f"(на {r['price_date']})"
+                )
+
+
+def _stats_cards(stats) -> None:
+    """Сводка по поставщикам карточками — на телефоне."""
+    for s in stats:
+        with st.container(border=True):
+            st.markdown(f"**{s.source_name}**")
+            st.caption(f"Последняя цена: {_fmt_price(s.last_price)} · Дата: {s.last_date}")
+            st.caption(
+                f"Мин.: {_fmt_price(s.min_price)} · Макс.: {_fmt_price(s.max_price)} · "
+                f"Средняя: {_fmt_price(s.avg_price)}"
+            )
+            st.caption(f"Период цен: {s.first_date} — {s.last_date}")
 
 
 def render() -> None:
@@ -103,6 +157,7 @@ def render() -> None:
             )
             return
 
+        st.markdown(_SUPPLIERS_CSS, unsafe_allow_html=True)
         st.subheader("Таблица «товар × поставщик» (последние цены)")
         _render_matrix(items)
 
@@ -158,7 +213,10 @@ def render() -> None:
                 "first_date": "Дата первой",
             }
         )
-        st.dataframe(stats_df, width="stretch", hide_index=True)
+        with st.container(key="suppliers_stats_phone"):
+            st.dataframe(stats_df, width="stretch", hide_index=True)
+        with st.container(key="suppliers_cards_stats_phone"):
+            _stats_cards(stats)
 
         cheapest = pick_cheapest(stats)
         if cheapest is not None:

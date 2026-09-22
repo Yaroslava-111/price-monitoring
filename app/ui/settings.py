@@ -19,6 +19,20 @@ KIND_LABELS = {
 STATUS_LABELS = {"approved": "Разрешён", "blocked": "Заблокирован", "expired": "Срок истёк"}
 STATUS_COLORS = {"approved": "green", "blocked": "red", "expired": "orange"}
 
+# Как на остальных экранах: реестр источников на телефоне — карточками,
+# на десктопе — таблицей. Скрытие ограничено таблицей реестра.
+_SOURCES_CSS = """
+<style>
+@media (max-width: 767px) {
+  .st-key-sources_cards_phone { display: block !important; }
+  .st-key-sources_table_phone [data-testid="stDataFrame"] { display: none !important; }
+}
+@media (min-width: 768px) {
+  .st-key-sources_cards_phone { display: none !important; }
+}
+</style>
+"""
+
 
 def _conn() -> sqlite3.Connection:
     return get_connection()
@@ -180,7 +194,24 @@ def _list_sources() -> None:
         lambda _col: [f"color:{c};font-weight:600" for c in row_colors],
         subset=["Статус"],
     )
-    st.dataframe(styled, width="stretch", hide_index=True)
+    st.markdown(_SOURCES_CSS, unsafe_allow_html=True)
+    with st.container(key="sources_table_phone"):
+        st.dataframe(styled, width="stretch", hide_index=True)
+    with st.container(key="sources_cards_phone"):
+        _source_cards(sources)
+
+
+def _source_cards(sources) -> None:
+    """Реестр источников карточками — на телефоне читается целиком."""
+    for s in sources:
+        with st.container(border=True):
+            st.markdown(f"**{s.name}** — {_status_badge(s.status)}")
+            st.caption(f"{SCOPE_LABELS[s.scope]} · {KIND_LABELS[s.kind]}")
+            st.caption(f"URL: {s.origin_url or '—'}")
+            st.caption(
+                f"Атрибуция: {'да' if s.requires_attribution else 'нет'} · "
+                f"Интервал: {s.min_refresh_minutes} мин"
+            )
 
 
 def _form_edit_source() -> None:

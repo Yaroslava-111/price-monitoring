@@ -25,6 +25,29 @@ HISTORY_FIRST = 20
 HISTORY_STEP = 10
 HISTORY_LIMIT_KEY = "upload_history_limit"
 
+# Как и список товаров (см. app.ui.catalog), история на телефоне показывается
+# карточками: в узкой таблице не читаются длинные имена файлов и происходит
+# горизонтальный скролл. Оба блока отрисовываются, CSS прячет лишний по ширине
+# экрана. Скрываем только таблицу истории (правило сужено ключевым
+# контейнером) — предпросмотр файла на этом экране остаётся видимым.
+_HISTORY_CSS = """
+<style>
+@media (max-width: 767px) {
+  .st-key-upload_history_cards_phone { display: block !important; }
+  .st-key-upload_history_table_phone [data-testid="stDataFrame"] { display: none !important; }
+}
+@media (min-width: 768px) {
+  .st-key-upload_history_cards_phone { display: none !important; }
+}
+</style>
+"""
+
+_HISTORY_STATUS_LABELS = {
+    "": "Выполняется",
+    "success": "Успешно",
+    "partial": "Частично",
+}
+
 
 def _conn() -> sqlite3.Connection:
     return get_connection()
@@ -230,24 +253,10 @@ def _render_history(conn: sqlite3.Connection) -> None:
     limit = min(st.session_state.get(HISTORY_LIMIT_KEY, HISTORY_FIRST), total)
     rows = loads_service.list_loads(conn, limit=limit)
 
-    df = pd.DataFrame(rows)
-    df["scope"] = df["scope"].map(SCOPE_TITLE).fillna(df["scope"])
-    df["source_name"] = df["source_name"].fillna("Разовый файл")
-    df = df.rename(
-        columns={
-            "id": "№",
-            "scope": "Контур",
-            "source_name": "Источник",
-            "status": "Статус",
-            "file_name": "Файл",
-            "total_rows": "Строк",
-            "ok_rows": "Принято",
-            "error_rows": "Ошибок",
-            "started_at": "Начало",
-            "finished_at": "Конец",
-        }
-    )
-    st.dataframe(df, width="stretch", hide_index=True)
+    st.markdown(_HISTORY_CSS, unsafe_allow_html=True)
+    _history_table(rows)
+    with st.container(key="upload_history_cards_phone"):
+        _history_cards(rows)
 
     shown = len(rows)
     st.caption(f"Показано {shown} из {total}.")
@@ -270,6 +279,55 @@ def _render_history(conn: sqlite3.Connection) -> None:
         ):
             st.session_state[HISTORY_LIMIT_KEY] = HISTORY_FIRST
             st.rerun()
+
+
+def _history_table(rows: list[dict]) -> None:
+    """История загрузок таблицей — на широких экранах."""
+    df = pd.DataFrame(rows)
+    df["scope"] = df["scope"].map(SCOPE_TITLE).fillna(df["scope"])
+    df["source_name"] = df["source_name"].fillna("Разовый файл")
+    df = df.rename(
+        columns={
+            "id": "№",
+            "scope": "Контур",
+            "source_name": "Источник",
+            "status": "Статус",
+            "file_name": "Файл",
+            "total_rows": "Строк",
+            "ok_rows": "Принято",
+            "error_rows": "Ошибок",
+            "started_at": "Начало",
+            "finished_at": "Конец",
+        }
+    )
+    with st.container(key="upload_history_table_phone"):
+        st.dataframe(df, width="stretch", hide_index=True)
+
+
+def _fmt_dt(value: str | None) -> str:
+    """"2026-09-22 15:04:11" -> "2026-09-22 15:04"; пустое — «—»."""
+    if not value:
+        return "—"
+    return value[:16]
+
+
+def _history_cards(rows: list[dict]) -> None:
+    """История загрузок карточками — на телефоне текст читается целиком."""
+    for r in rows:
+        scope = SCOPE_TITLE.get(r["scope"], r["scope"])
+        status = _HISTORY_STATUS_LABELS.get(r["status"], r["status"])
+        with st.container(border=True):
+            st.markdown(f"**№{r['id']} · {scope}** — {status}")
+            st.caption(f"Источник: {r['source_name'] or 'Разовый файл'}")
+            st.caption(f"Файл: {r['file_name']}")
+            st.caption(
+                f"Строк: {r['total_rows']} · Принято: {r['ok_rows']} · "
+                f"Ошибок: {r['error_rows']}"
+            )
+            st.caption(
+                f"Начало: {_fmt_dt(r['started_at'])} · "
+                f"Конец: {_fmt_dt(r['finished_at'])}"
+            )
 
 
 if __name__ == "__main__":

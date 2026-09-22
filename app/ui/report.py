@@ -14,6 +14,26 @@ from app.ui import agent_block
 
 _SETTING_KEY = "deviation_threshold_pct"
 
+# Как каталог и история загрузок: на телефоне ширины не хватает на девять
+# колонок — отклонения показываются карточками, на широких экранах остаётся
+# таблица. Скрытие ограничено таблицей отчёта (контейнер с ключом), блок
+# рекомендаций агента не затрагивается.
+_REPORT_CSS = """
+<style>
+@media (max-width: 767px) {
+  .st-key-report_cards_phone { display: block !important; }
+  .st-key-report_table_phone [data-testid="stDataFrame"] { display: none !important; }
+}
+@media (min-width: 768px) {
+  .st-key-report_cards_phone { display: none !important; }
+}
+</style>
+"""
+
+
+def _fmt_price(v: float) -> str:
+    return f"{v:,.2f} ₽".replace(",", " ")
+
 
 def _conn() -> sqlite3.Connection:
     return get_connection()
@@ -69,6 +89,20 @@ def _apply_filters() -> tuple[float, str, int | None, str, str]:
         date_to_s = ""
     conn_filter.close()
     return threshold, category, source_id, date_from_s, date_to_s
+
+
+def _report_cards(rows: list[dict]) -> None:
+    """Отклонения карточками — на телефоне читается всё содержимое строки."""
+    for r in rows:
+        with st.container(border=True):
+            st.markdown(f"**{r['product_name']}** — {r['sku']}")
+            st.caption(f"Категория: {r['category'] or '—'}")
+            st.caption(
+                f"Ваша цена: {_fmt_price(r['own_price'])} · "
+                f"Конкурент: {_fmt_price(r['price'])}"
+            )
+            st.caption(f"Δ: {_fmt_price(r['delta_rub'])} ({r['deviation_pct']:.1f}%)")
+            st.caption(f"Источник: {r['source_name']} · Дата цены: {r['price_date']}")
 
 
 def _save_threshold(conn: sqlite3.Connection, threshold: float) -> None:
@@ -131,20 +165,21 @@ def render() -> None:
     }
     df_display = df[list(visible)].rename(columns=visible)
 
-    def _fmt_price(v: float) -> str:
-        return f"{v:,.2f} ₽".replace(",", " ")
-
-    st.dataframe(
-        df_display,
-        width="stretch",
-        hide_index=True,
-        column_config={
-            "Ваша цена, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
-            "Цена конкурента, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
-            "Δ, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
-            "Δ, %": st.column_config.NumberColumn(format="%.1f %%"),
-        },
-    )
+    st.markdown(_REPORT_CSS, unsafe_allow_html=True)
+    with st.container(key="report_table_phone"):
+        st.dataframe(
+            df_display,
+            width="stretch",
+            hide_index=True,
+            column_config={
+                "Ваша цена, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
+                "Цена конкурента, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
+                "Δ, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
+                "Δ, %": st.column_config.NumberColumn(format="%.1f %%"),
+            },
+        )
+    with st.container(key="report_cards_phone"):
+        _report_cards(rows)
 
     st.caption("Самое сильное отклонение сверху (отрицательное Δ%).")
 

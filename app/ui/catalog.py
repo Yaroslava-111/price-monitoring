@@ -9,6 +9,24 @@ from app.services import catalog as catalog_service
 from app.services.catalog import Product, ValidationError
 from app.storage.db import get_connection
 
+# Видимость таблицы/карточек управляется чистым CSS по ширине экрана:
+# на телефоне строка таблицы обрезает длинные названия и уводит контент
+# в горизонтальный скролл, поэтому там показываем карточки с полным текстом,
+# на широких экранах — обычную таблицу. Оба блока отрисовываются, CSS
+# прячет лишний без участия сервера. Правило инжектится только на этом
+# экране, на другие страницы не попадает.
+_CATALOG_CSS = """
+<style>
+@media (max-width: 767px) {
+  .st-key-catalog_cards_phone { display: block !important; }
+  [data-testid="stDataFrame"] { display: none !important; }
+}
+@media (min-width: 768px) {
+  .st-key-catalog_cards_phone { display: none !important; }
+}
+</style>
+"""
+
 
 def _conn() -> sqlite3.Connection:
     return get_connection()
@@ -114,6 +132,24 @@ def _list_products() -> None:
         st.info("Каталог пуст. Добавьте первый товар.")
         return
 
+    st.markdown(_CATALOG_CSS, unsafe_allow_html=True)
+    _list_products_table(products)
+    with st.container(key="catalog_cards_phone"):
+        _list_products_cards(products)
+
+
+def _list_products_cards(products: list[Product]) -> None:
+    for p in products:
+        with st.container(border=True):
+            st.markdown(f"**{p.sku}** — {p.name}")
+            st.caption(
+                f"Категория: {p.category or '—'} · "
+                f"Своя цена: {_format_price(p.own_price)} · "
+                f"Активен: {'да' if p.is_active else 'нет'}"
+            )
+
+
+def _list_products_table(products: list[Product]) -> None:
     rows = [
         {
             "SKU": p.sku,
@@ -128,6 +164,13 @@ def _list_products() -> None:
         pd.DataFrame(rows),
         width="stretch",
         hide_index=True,
+        column_config={
+            "SKU": st.column_config.TextColumn(width=90),
+            "Название": st.column_config.TextColumn(width=240),
+            "Категория": st.column_config.TextColumn(width=130),
+            "Своя цена": st.column_config.TextColumn(width=110),
+            "Активен": st.column_config.TextColumn(width=80),
+        },
     )
 
 

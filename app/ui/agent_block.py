@@ -90,14 +90,20 @@ def _run(conn: sqlite3.Connection, agent, scope: str, rec_type: str) -> None:
         text = EMPTY_HINT[scope]
 
     # Если модель настроена, но не ответила, текст собран по шаблону —
-    # об этом надо сказать, иначе подмена пройдёт незаметно.
+    # об этом надо сказать, иначе подмена пройдёт незаметно. И показать
+    # это как предупреждение, а не зелёный успех.
+    fallback = agent.is_live and agent.last_llm_error
     note = ""
-    if agent.is_live and agent.last_llm_error:
+    if fallback:
         note = f" Модель не ответила ({agent.last_llm_error}), текст собран по шаблону."
+
+    level = "success" if (new_recs or total) else "info"
+    if fallback:
+        level = "warning"
 
     st.session_state[RESULT_KEY] = {
         "scope": scope,
-        "level": "success" if (new_recs or total) else "info",
+        "level": level,
         "text": text + note,
     }
 
@@ -113,6 +119,8 @@ def _show_last_result(scope: str) -> None:
     text = result.get("text", "")
     if level == "error":
         st.error(text)
+    elif level == "warning":
+        st.warning(text)
     elif level == "success":
         st.success(text)
     else:

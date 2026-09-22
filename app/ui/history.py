@@ -15,6 +15,21 @@ def _conn() -> sqlite3.Connection:
     return get_connection()
 
 
+# Как и на остальных экранах: на телефоне «Ряды цен» показываются карточками,
+# на десктопе остаются таблицей. Скрытие ограничено таблицей рядов.
+_HISTORY_CSS = """
+<style>
+@media (max-width: 767px) {
+  .st-key-history_cards_phone { display: block !important; }
+  .st-key-history_table_phone [data-testid="stDataFrame"] { display: none !important; }
+}
+@media (min-width: 768px) {
+  .st-key-history_cards_phone { display: none !important; }
+}
+</style>
+"""
+
+
 def render() -> None:
     st.header("История цен")
     st.caption(
@@ -70,15 +85,19 @@ def render() -> None:
                 "source_name": "Источник",
             }
         )
-        st.dataframe(
-            view[["Цена, ₽", "Дата цены", "Источник"]],
-            width="stretch",
-            hide_index=True,
-            column_config={
-                "Цена, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
-                "Дата цены": st.column_config.DateColumn(format="DD.MM.YYYY"),
-            },
-        )
+        st.markdown(_HISTORY_CSS, unsafe_allow_html=True)
+        with st.container(key="history_table_phone"):
+            st.dataframe(
+                view[["Цена, ₽", "Дата цены", "Источник"]],
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Цена, ₽": st.column_config.NumberColumn(format="%.2f ₽"),
+                    "Дата цены": st.column_config.DateColumn(format="DD.MM.YYYY"),
+                },
+            )
+        with st.container(key="history_cards_phone"):
+            _rows_cards(view)
 
         st.download_button(
             "Скачать CSV",
@@ -90,6 +109,16 @@ def render() -> None:
         )
     finally:
         conn.close()
+
+
+def _rows_cards(view: pd.DataFrame) -> None:
+    """Ряды цен карточками — на телефоне каждая строка читается целиком."""
+    for _, row in view.iterrows():
+        price = f"{float(row['Цена, ₽']):,.2f} ₽".replace(",", " ")
+        date = pd.Timestamp(row["Дата цены"]).strftime("%d.%m.%Y")
+        with st.container(border=True):
+            st.markdown(f"**{price}**")
+            st.caption(f"{row['Источник']} · {date}")
 
 
 if __name__ == "__main__":

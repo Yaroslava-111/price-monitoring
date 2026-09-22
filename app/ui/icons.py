@@ -298,7 +298,7 @@ def css(
         rules.append(_rule(f".st-key-{form} {ICON_SPAN}", name, size))
     for url_path, name in sorted(nav.items()):
         rules.append(_rule(f'a[href$="/{url_path}"] {ICON_SPAN}', name, size))
-    return "<style>" + CAPTION_CSS + "".join(rules) + "</style>"
+    return "<style>" + CAPTION_CSS + MOBILE_CSS + "".join(rules) + "</style>"
 
 
 def inject(widget_icons: dict[str, str] | None = None, size: str = "1.15rem") -> None:
@@ -315,6 +315,33 @@ CAPTION_CSS = (
     ".ui-caption{display:flex;align-items:flex-start;gap:.45rem;"
     "font-size:.875rem;line-height:1.4;opacity:.7;margin:.25rem 0 .5rem;}"
     ".ui-caption svg{flex:0 0 auto;margin-top:.12rem;}"
+)
+
+# Мобильная вёрстка: на узких экранах у Streamlit нет горизонтального скролла.
+# Колонки переносятся на новую строку, длинные слова и ссылки переносятся,
+# виджеты и таблицы не раздвигают страницу дальше ширины экрана.
+MOBILE_CSS = (
+    "@media (max-width: 767px){"
+    "html,body{overflow-x:hidden}"
+    "[data-testid=\"stApp\"],[data-testid=\"stAppViewContainer\"]{overflow-x:hidden}"
+    ".block-container{min-width:0;max-width:100%;padding-left:1rem;padding-right:1rem}"
+    "/* колонки в ряд переносятся на новую строку, а не сжимаются до упора */"
+    "[data-testid=\"stHorizontalBlock\"]{flex-wrap:wrap;row-gap:.5rem}"
+    "[data-testid=\"stHorizontalBlock\"]>div{flex:0 0 100% !important;"
+    "min-width:100% !important;max-width:100% !important}"
+    "/* длинные слова, ключи и ссылки не растягивают страницу */"
+    "p,li,td,th,[data-testid=\"stMarkdownContainer\"],"
+    "[data-testid=\"stWidgetLabel\"]{overflow-wrap:anywhere;word-break:break-word}"
+    "code,pre,textarea{white-space:pre-wrap;overflow-wrap:anywhere}"
+    "/* виджеты ввода не раздуваются сверх колонки */"
+    ".stTextInput,.stNumberInput,.stDateInput,.stTimeInput,.stSelectbox,"
+    ".stMultiSelect,.stTextArea,.stCheckbox,.stRadio{min-width:0;max-width:100%}"
+    "/* таблицы и графики скроллятся внутри себя, а не тянут страницу */"
+    "[data-testid=\"stDataFrame\"],[data-testid=\"stTable\"],"
+    "[data-testid=\"stPlotlyChart\"],.js-plotly-plot,.plotly-graph-div{max-width:100%}"
+    "/* вкладки переносятся на новую строку */"
+    "[data-testid=\"stTabs\"] [role=\"tablist\"]{flex-wrap:wrap;row-gap:.25rem}"
+    "}"
 )
 
 
