@@ -130,7 +130,7 @@ def test_http_401_explains_key(monkeypatch):
 
 
 def test_http_403_mentions_suspended_agent(monkeypatch):
-    """Реальный ответ Timeweb: агент остановлен в панели, а не проблема с ключом."""
+    """Агент остановлен в панели, а не проблема с ключом."""
     err = urllib.error.HTTPError(
         "https://a", 403, "Forbidden", {}, io.BytesIO("Agent suspended".encode("utf-8"))
     )

@@ -296,13 +296,13 @@ def agent_status(conn) -> tuple[bool, str]:
         return True, f"Агент подключён: обоснования пишет модель «{adapter.model}»."
     gaps = ", ".join(adapter.config.missing())
     return False, (
-        "Режим-заглушка: обращения к Timeweb не происходит, тексты собираются "
+        "Режим-заглушка: обращения к сервису ИИ не происходит, тексты собираются "
         f"локально по шаблону. Не заданы: {gaps}."
     )
 
 
 def _agent_section() -> None:
-    st.subheader("Параметры ИИ-агента (Timeweb)")
+    st.subheader("Параметры ИИ-агента")
 
     conn = _conn()
     try:
@@ -326,9 +326,9 @@ def _agent_section() -> None:
     )
 
     endpoint_new = st.text_input(
-        "Эндпоинт Timeweb",
+        "Эндпоинт",
         value=endpoint,
-        placeholder="https://agent.timeweb.cloud/api/v1/cloud-ai/agents/<id>/v1",
+        placeholder="https://api.example.com/v1",
         key="agent_endpoint_input",
         icon=":material/link:",
     )
@@ -343,7 +343,7 @@ def _agent_section() -> None:
     model_new = st.text_input(
         "Модель",
         value=model,
-        placeholder="имя модели из панели Timeweb — без него запрос не уйдёт",
+        placeholder="имя модели — без него запрос не уйдёт",
         key="agent_model_input",
         icon=":material/auto_awesome:",
     )
