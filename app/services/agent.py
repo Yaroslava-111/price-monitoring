@@ -508,6 +508,6 @@ def latest_match_rationale(
 def load_agent(conn: sqlite3.Connection) -> AgentAdapter:
     """Собирает параметры (endpoint/key/model) из settings и отдаёт адаптер."""
     endpoint = settings_service.get_setting(conn, "agent_endpoint")
-    api_key = settings_service.get_setting(conn, "agent_key")
+    api_key = settings_service.get_secret(conn, "agent_key")
     model = settings_service.get_setting(conn, "agent_model")
     return AgentAdapter(conn, endpoint=endpoint, api_key=api_key, model=model)

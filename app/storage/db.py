@@ -4,6 +4,8 @@ import os
 import sqlite3
 from pathlib import Path
 
+import app.env  # noqa: F401 — поднимает .env в os.environ
+
 BASE_DIR = Path(__file__).resolve().parents[2]
 
 

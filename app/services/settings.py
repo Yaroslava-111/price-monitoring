@@ -1,9 +1,36 @@
 from __future__ import annotations
 
+import os
 import sqlite3
+
+import app.env  # noqa: F401 — поднимает .env в os.environ
 
 from app.storage.db import DEFAULT_SETTINGS
 from app.storage.repositories import fetch_one
+
+# Секреты, которые читаются из переменных окружения (.env) в приоритете
+# над значениями из базы: если переменная задана, значение в БД не читается
+# и при сохранении настроек туда не пишется.
+SECRET_ENV = {
+    "agent_key": "MONITORING_AGENT_API_KEY",
+    "telegram_bot_token": "MONITORING_TELEGRAM_BOT_TOKEN",
+}
+
+
+def env_secret(key: str) -> str:
+    """Значение секрета из окружения (без пробелов по краям) или пустая строка."""
+    env_name = SECRET_ENV.get(key)
+    if not env_name:
+        return ""
+    return os.environ.get(env_name, "").strip()
+
+
+def get_secret(conn: sqlite3.Connection, key: str) -> str:
+    """Секрет: из окружения, если задан; иначе из БД (режим совместимости)."""
+    value = env_secret(key)
+    if value:
+        return value
+    return get_setting(conn, key)
 
 
 def get_setting(conn: sqlite3.Connection, key: str) -> str:

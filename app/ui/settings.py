@@ -308,7 +308,7 @@ def _agent_section() -> None:
     try:
         live, status_text = agent_status(conn)
         endpoint = settings_service.get_setting(conn, "agent_endpoint")
-        api_key = settings_service.get_setting(conn, "agent_key")
+        api_key = settings_service.get_secret(conn, "agent_key")
         model = settings_service.get_setting(conn, "agent_model")
     finally:
         conn.close()
@@ -317,6 +317,12 @@ def _agent_section() -> None:
         st.success(status_text)
     else:
         st.warning(status_text)
+
+    if settings_service.env_secret("agent_key"):
+        st.caption(
+            "API-ключ задан в переменной окружения MONITORING_AGENT_API_KEY "
+            "(файл .env) — именно он используется, в базу ключ не пишется."
+        )
 
     st.markdown(
         "- Отбор позиций и все расчёты выполняются локально — модель пишет "
@@ -338,7 +344,9 @@ def _agent_section() -> None:
         type="password",
         key="agent_key_input",
         icon=":material/key:",
-        help="Хранится в локальной базе db/monitoring.db открытым текстом.",
+        help="Если переменная MONITORING_AGENT_API_KEY задана в .env — "
+        "используется она и в базу ключ не попадает. Иначе ключ хранится "
+        "в локальной базе открытым текстом.",
     )
     model_new = st.text_input(
         "Модель",
@@ -356,7 +364,8 @@ def _agent_section() -> None:
         conn = _conn()
         try:
             settings_service.set_setting(conn, "agent_endpoint", endpoint_new.strip())
-            settings_service.set_setting(conn, "agent_key", api_key_new.strip())
+            if not settings_service.env_secret("agent_key"):
+                settings_service.set_setting(conn, "agent_key", api_key_new.strip())
             settings_service.set_setting(conn, "agent_model", model_new.strip())
             st.success("Параметры агента сохранены.")
             st.rerun()
@@ -421,7 +430,7 @@ def _telegram_section() -> None:
     conn = _conn()
     try:
         live, status_text = telegram_status(conn)
-        bot_token = settings_service.get_setting(conn, "telegram_bot_token")
+        bot_token = settings_service.get_secret(conn, "telegram_bot_token")
         chat_id = settings_service.get_setting(conn, "telegram_chat_id")
         threshold = float(
             settings_service.get_setting(conn, "telegram_alert_threshold_pct") or "15"
@@ -437,10 +446,14 @@ def _telegram_section() -> None:
     st.markdown(
         "- Проверяется только контур **«Конкуренты»** — сразу после каждого импорта.\n"
         "- Сообщение уходит один раз на загрузку: повторный импорт того же файла "
-        "новых цен не создаёт и уведомление не дублирует.\n"
-        "- Токен и chat_id хранятся в локальной базе `db/monitoring.db` "
-        "открытым текстом."
+        "новых цен не создаёт и уведомление не дублирует."
     )
+
+    if settings_service.env_secret("telegram_bot_token"):
+        st.caption(
+            "Токен задан в переменной окружения MONITORING_TELEGRAM_BOT_TOKEN "
+            "(файл .env) — именно он используется, в базу токен не пишется."
+        )
 
     with st.expander(
         "Как завести бота и узнать chat_id",
@@ -466,6 +479,9 @@ def _telegram_section() -> None:
         type="password",
         key="telegram_token_input",
         placeholder="получен от @BotFather",
+        help="Если переменная MONITORING_TELEGRAM_BOT_TOKEN задана в .env — "
+        "используется она и в базу токен не попадает. Иначе токен хранится "
+        "в локальной базе открытым текстом.",
     )
     chat_id_new = st.text_input(
         "Chat ID",
@@ -490,7 +506,8 @@ def _telegram_section() -> None:
     ):
         conn = _conn()
         try:
-            settings_service.set_setting(conn, "telegram_bot_token", bot_token_new.strip())
+            if not settings_service.env_secret("telegram_bot_token"):
+                settings_service.set_setting(conn, "telegram_bot_token", bot_token_new.strip())
             settings_service.set_setting(conn, "telegram_chat_id", chat_id_new.strip())
             settings_service.set_setting(
                 conn, "telegram_alert_threshold_pct", str(int(clamp_threshold(threshold_new)))

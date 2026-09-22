@@ -26,7 +26,7 @@ MAX_ROWS_IN_MESSAGE = 20
 
 def config(conn: sqlite3.Connection) -> telegram.TelegramConfig:
     return telegram.TelegramConfig(
-        bot_token=settings_service.get_setting(conn, "telegram_bot_token"),
+        bot_token=settings_service.get_secret(conn, "telegram_bot_token"),
         chat_id=settings_service.get_setting(conn, "telegram_chat_id"),
     )
 
